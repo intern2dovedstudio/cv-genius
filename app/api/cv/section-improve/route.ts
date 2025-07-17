@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GeminiService } from '@/lib/gemini/service'
+import { geminiService } from '@/lib/gemini/service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Utiliser le service Gemini pour améliorer le contenu
-    const geminiService = new GeminiService()
     const improvedContent = await geminiService.improveCVContent(content, section)
 
     return NextResponse.json({
