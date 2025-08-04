@@ -1,4 +1,4 @@
-import { CVContent } from ".";
+import { CVFormData } from ".";
 
 // Types specific to CV generation process
 export type GenerationStepId = 'validation' | 'ai-improvement' | 'pdf-generation';
@@ -8,6 +8,7 @@ export interface GenerationStep {
   id: GenerationStepId;
   label: string;
   status: GenerationStepStatus;
+  icon?: any;
   details?: string;
 }
 
@@ -28,7 +29,7 @@ export interface CVGenerationCallbacks {
 
 export interface CVGenerationModalProps extends CVGenerationCallbacks {
   isOpen: boolean;
-  cvData: CVContent;
+  cvData: CVFormData;
 }
 
 export interface GenerationResult {
