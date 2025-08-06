@@ -1,6 +1,10 @@
 import { supabase } from "@/lib/supabase/client";
 import { CVFormData } from "@/types";
-import { GenerationResult } from "@/types/cvGeneration";
+import {
+  CVGenerationError,
+  GenerationResult,
+  GenerationStepId,
+} from "@/types/cvGeneration";
 
 class CVGenerationService {
   public cleanup: (() => void) | null = null;
@@ -51,10 +55,7 @@ class CVGenerationService {
         throw new Error(result.error || "Erreur lors de l'amélioration IA");
       }
 
-      console.log(
-        "Amelioration CV response:",
-        JSON.stringify(result, null, 2)
-      );
+      console.log("Amelioration CV response:", JSON.stringify(result, null, 2));
 
       return {
         success: true,
@@ -112,16 +113,16 @@ class CVGenerationService {
    */
   simulateAIStreaming(
     text: string,
-    setAiResponse: (updater: (prev: string) => string) => void
+    updateAiResponse: (response: string) => void
   ): () => void {
     const words = text.split(" ");
     let currentIndex = 0;
+    let accumulatedText = "";
 
     const interval = setInterval(() => {
       if (currentIndex < words.length) {
-        setAiResponse(
-          (prev) => prev + (currentIndex === 0 ? "" : " ") + words[currentIndex]
-        );
+        accumulatedText += (currentIndex === 0 ? "" : " ") + words[currentIndex];
+        updateAiResponse(accumulatedText);
         currentIndex++;
       } else {
         clearInterval(interval);
@@ -136,9 +137,30 @@ class CVGenerationService {
    * Generate stream text for AI improvement step
    */
   getAIStreamText(cvData: CVFormData): string {
-    return `Amélioration du profil professionnel de ${cvData.personalInfo.name}. ` +
+    return (
+      `Amélioration du profil professionnel de ${cvData.personalInfo.name}. ` +
       `Optimisation des descriptions d'expériences, renforcement des compétences clés, ` +
-      `adaptation du vocabulaire pour les systèmes ATS, quantification des réalisations...`;
+      `adaptation du vocabulaire pour les systèmes ATS, quantification des réalisations...`
+    );
+  }
+
+  /** Helper function to create CVGenerationError objects */
+  createCVGenerationError(
+    message: string,
+    options?: {
+      code?: string;
+      step?: GenerationStepId;
+      details?: string;
+      error?: Error;
+    }
+  ): CVGenerationError {
+    return {
+      message,
+      code: options?.code || options?.error?.name || "UNKNOWN_ERROR",
+      step: options?.step,
+      details: options?.details || options?.error?.stack,
+      timestamp: new Date(),
+    };
   }
 
   /**

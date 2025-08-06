@@ -2,8 +2,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import jsPDF from "jspdf";
 import { CVFormData } from "@/types";
-import { uploadPdfToStorageAdmin, createResumeAdmin } from "@/lib/supabase/server";
-import { parseAndValidateCVRequest, createErrorResponse, AuthenticatedUser } from "@/lib/utils/apiRoutes";
+import {
+  uploadPdfToStorageAdmin,
+  createResumeAdmin,
+} from "@/lib/supabase/server";
+import {
+  parseAndValidateCVRequest,
+  createErrorResponse,
+  AuthenticatedUser,
+} from "@/lib/utils/apiRoutes";
 
 /**
  * Main POST handler for CV generation
@@ -19,17 +26,27 @@ export async function POST(req: NextRequest) {
     const pdfBuffer = await generatePDF(cvData);
 
     // 3. Handle file storage and database
-    const { resumeId, pdfPath } = await handleFileStorageAndDatabase(user, cvData, pdfBuffer);
+    const { resumeId, pdfPath } = await handleFileStorageAndDatabase(
+      user,
+      cvData,
+      pdfBuffer
+    );
 
     // 4. Create success response
     const response = createSuccessResponse(resumeId, pdfPath);
-    
+
     console.log("🎉 API call completed successfully, response:", response);
     return NextResponse.json(response);
   } catch (error) {
     console.error("💥 ERROR in CV generation API:");
-    console.error("Error message:", error instanceof Error ? error.message : "Unknown error");
-    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+    console.error(
+      "Error message:",
+      error instanceof Error ? error.message : "Unknown error"
+    );
+    console.error(
+      "Error stack:",
+      error instanceof Error ? error.stack : "No stack trace"
+    );
     console.error("Full error object:", error);
 
     return createErrorResponse(error, 500);
@@ -89,7 +106,7 @@ function generateFilePath(userId: string, name?: string): string {
   const sanitizedName = name?.replace(/\s+/g, "_") || "CV";
   const randomSuffix = Math.floor(Math.random() * 100);
   const timestamp = Date.now();
-  
+
   return `${userId}/CV_${sanitizedName}__${randomSuffix}_${timestamp}.pdf`;
 }
 
@@ -141,7 +158,10 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
   doc.setFont("helvetica");
 
   // Helper function to wrap text to max line length
-  const wrapText = (text: string, maxLength: number = maxLineLength): string[] => {
+  const wrapText = (
+    text: string,
+    maxLength: number = maxLineLength
+  ): string[] => {
     if (!text || text.length <= maxLength) return [text || ""];
 
     const words = text.split(" ");
@@ -162,7 +182,13 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
   };
 
   // Helper function to add text with automatic wrapping
-  const addWrappedText = (text: string, x: number, y: number, fontSize: number, isBold: boolean = false): number => {
+  const addWrappedText = (
+    text: string,
+    x: number,
+    y: number,
+    fontSize: number,
+    isBold: boolean = false
+  ): number => {
     doc.setFontSize(fontSize);
     doc.setFont("helvetica", isBold ? "bold" : "normal");
 
@@ -178,7 +204,12 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
   };
 
   // Helper function to create bullet points from text with \n
-  const addBulletPoints = (text: string, x: number, y: number, fontSize: number): number => {
+  const addBulletPoints = (
+    text: string,
+    x: number,
+    y: number,
+    fontSize: number
+  ): number => {
     if (!text) return y;
 
     const bulletPoints = text
@@ -232,13 +263,20 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
     .filter((info) => info && info.trim())
     .join(" | ");
 
-  currentY = addWrappedText(contactInfo, margins.left, currentY, fontSize.content);
+  currentY = addWrappedText(
+    contactInfo,
+    margins.left,
+    currentY,
+    fontSize.content
+  );
   currentY += sectionSpacing;
 
   // 2. EXPERIENCE SECTION
   if (cvData.experiences && cvData.experiences.length > 0) {
     const experienceTitle =
-      cvData.experiences.length > 1 ? "EXPÉRIENCES PROFESSIONNELLES" : "EXPÉRIENCE PROFESSIONNELLE";
+      cvData.experiences.length > 1
+        ? "EXPÉRIENCES PROFESSIONNELLES"
+        : "EXPÉRIENCE PROFESSIONNELLE";
     currentY = addSectionHeader(experienceTitle, currentY);
 
     for (const exp of cvData.experiences) {
@@ -246,20 +284,40 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
 
       // Company and position
       const expHeader = `${exp.position} - ${exp.company}`;
-      currentY = addWrappedText(expHeader, margins.left, currentY, fontSize.content, true);
+      currentY = addWrappedText(
+        expHeader,
+        margins.left,
+        currentY,
+        fontSize.content,
+        true
+      );
 
       // Date and location
-      const dateLocation = [exp.startDate, exp.endDate || (exp.isCurrentPosition ? "Présent" : ""), exp.location]
+      const dateLocation = [
+        exp.startDate,
+        exp.endDate || (exp.isCurrentPosition ? "Présent" : ""),
+        exp.location,
+      ]
         .filter((info) => info && info.trim())
         .join(" | ");
 
       if (dateLocation) {
-        currentY = addWrappedText(dateLocation, margins.left, currentY, fontSize.small);
+        currentY = addWrappedText(
+          dateLocation,
+          margins.left,
+          currentY,
+          fontSize.small
+        );
       }
 
       // Description with bullet points
       if (exp.description) {
-        currentY = addBulletPoints(exp.description, margins.left + 5, currentY, fontSize.content);
+        currentY = addBulletPoints(
+          exp.description,
+          margins.left + 5,
+          currentY,
+          fontSize.content
+        );
       }
 
       currentY += lineHeight; // Space between experiences
@@ -270,7 +328,8 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
 
   // 3. EDUCATION SECTION
   if (cvData.education && cvData.education.length > 0) {
-    const educationTitle = cvData.education.length > 1 ? "FORMATIONS" : "FORMATION";
+    const educationTitle =
+      cvData.education.length > 1 ? "FORMATIONS" : "FORMATION";
     currentY = addSectionHeader(educationTitle, currentY);
 
     for (const edu of cvData.education) {
@@ -278,18 +337,36 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
 
       // Degree and institution
       const eduHeader = `${edu.degree} - ${edu.institution}`;
-      currentY = addWrappedText(eduHeader, margins.left, currentY, fontSize.content, true);
+      currentY = addWrappedText(
+        eduHeader,
+        margins.left,
+        currentY,
+        fontSize.content,
+        true
+      );
 
       // Field, dates
-      const eduDetails = [edu.field, edu.startDate, edu.endDate].filter((info) => info && info.trim()).join(" | ");
+      const eduDetails = [edu.field, edu.startDate, edu.endDate]
+        .filter((info) => info && info.trim())
+        .join(" | ");
 
       if (eduDetails) {
-        currentY = addWrappedText(eduDetails, margins.left, currentY, fontSize.small);
+        currentY = addWrappedText(
+          eduDetails,
+          margins.left,
+          currentY,
+          fontSize.small
+        );
       }
 
       // Description with bullet points if available
       if (edu.description) {
-        currentY = addBulletPoints(edu.description, margins.left + 5, currentY, fontSize.content);
+        currentY = addBulletPoints(
+          edu.description,
+          margins.left + 5,
+          currentY,
+          fontSize.content
+        );
       }
 
       currentY += lineHeight; // Space between education entries
@@ -297,6 +374,26 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
 
     currentY += sectionSpacing;
   }
+
+  /**
+   * Helper function: Groups skills by category from the form data.
+   */
+  const groupByCat = (skills?: CVFormData["skills"]) => {
+    if (!skills) return [];
+    const skillMap = skills.reduce((map, s) => {
+      // Use "Compétences Techniques" or "Autres" as default categories
+      const cat =
+        s.category === "technical"
+          ? "Compétences Techniques"
+          : s.category || "Autres";
+      map.set(cat, [...(map.get(cat) || []), s.name!]);
+      return map;
+    }, new Map<string, string[]>());
+
+    return Array.from(skillMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([cat, list]) => ({ cat: cat.toUpperCase(), list }));
+  };
 
   // 4. SKILLS SECTION
   if (cvData.skills && cvData.skills.length > 0) {
@@ -306,11 +403,22 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
 
     for (const { cat, list } of skillsByCategory) {
       // Category name
-      currentY = addWrappedText(cat + ":", margins.left, currentY, fontSize.content, true);
+      currentY = addWrappedText(
+        cat + ":",
+        margins.left,
+        currentY,
+        fontSize.content,
+        true
+      );
 
       // Skills list
       const skillsText = list.join(", ");
-      currentY = addWrappedText(skillsText, margins.left + 5, currentY, fontSize.content);
+      currentY = addWrappedText(
+        skillsText,
+        margins.left + 5,
+        currentY,
+        fontSize.content
+      );
       currentY += lineHeight; // Space between categories
     }
 
@@ -325,7 +433,12 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
       if (!lang.name) continue;
 
       const langText = `${lang.name}${lang.level ? ` (${lang.level})` : ""}`;
-      currentY = addWrappedText(langText, margins.left, currentY, fontSize.content);
+      currentY = addWrappedText(
+        langText,
+        margins.left,
+        currentY,
+        fontSize.content
+      );
     }
   }
 
@@ -333,20 +446,3 @@ async function generatePDF(cvData: CVFormData): Promise<Buffer> {
   const pdfData = doc.output("arraybuffer");
   return Buffer.from(pdfData);
 }
-
-/**
- * Groups skills by category from the form data.
- */
-const groupByCat = (skills?: CVFormData["skills"]) => {
-  if (!skills) return [];
-  const skillMap = skills.reduce((map, s) => {
-    // Use "Compétences Techniques" or "Autres" as default categories
-    const cat = s.category === "technical" ? "Compétences Techniques" : s.category || "Autres";
-    map.set(cat, [...(map.get(cat) || []), s.name!]);
-    return map;
-  }, new Map<string, string[]>());
-
-  return Array.from(skillMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([cat, list]) => ({ cat: cat.toUpperCase(), list }));
-};

@@ -218,7 +218,17 @@ export default function CVGenerationModal({
                   Erreur lors de la génération
                 </span>
               </div>
-              <div className="text-sm text-red-600 mt-1">{error}</div>
+              <div className="text-sm text-red-600 mt-1">{error.message}</div>
+              {error.step && (
+                <div className="text-xs text-red-500 mt-1">
+                  Étape: {error.step}
+                </div>
+              )}
+              {error.code && (
+                <div className="text-xs text-red-500 mt-1">
+                  Code: {error.code}
+                </div>
+              )}
               <Button
                 data-testid="cv-generation-retry"
                 onClick={startGeneration}
