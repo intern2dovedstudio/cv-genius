@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useReducer } from "react";
+import { useEffect, useCallback, useReducer, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CVFormData } from "@/types";
 import {
@@ -126,25 +126,99 @@ export function useCVGeneration({
   onComplete,
   onClose,
 }: UseCVGenerationProps) {
+  const [state, dispatch] = useReducer(modalReducer, initialState);
   const router = useRouter();
 
-  const [state, dispatch] = useReducer(modalReducer, initialState);
+  const isGeneratingRef = useRef(state.isGenerating);
+  isGeneratingRef.current = state.isGenerating;
 
-  // PDF generation logic
+  // Add ref to track current step being processed
+  const currentStepRef = useRef<GenerationStepId | null>(null);
+
+  /** Step 1: Validate CV data */
+  const validateData = useCallback(async () => {
+    currentStepRef.current = "validation";
+    dispatch({
+      type: "PROCESS_START",
+      payload: {
+        stepContent: "Vérification des données du CV...",
+        stepId: "validation",
+        status: "running",
+      },
+    });
+    const validation = await new Promise((resolve) => {
+      setTimeout(() => {
+        const result = cvGenerationService.validateCVData(cvData!);
+        resolve(result);
+      }, 1000);
+    });
+
+    if (!(validation as any).isValid) {
+      throw new Error((validation as any).error || "Données invalides");
+    }
+
+    dispatch({
+      type: "PROCESS_SUCCESS",
+      payload: {
+        resumeId: null,
+        isCompleted: false,
+        stepId: "validation",
+        status: "completed",
+        details: "Completée",
+        stepContent: "Données validées avec succès",
+      },
+    });
+    currentStepRef.current = null;
+  }, [cvData]);
+
+  /** Step 2: Improve CV data with AI*/
+  const improveCV = useCallback(async () => {
+    currentStepRef.current = "ai-improvement";
+    dispatch({
+      type: "PROCESS_START",
+      payload: {
+        stepContent: "Amélioration du contenu par IA...",
+        stepId: "ai-improvement",
+        status: "running",
+      },
+    });
+    // Start AI streaming simulation
+    const streamText = cvGenerationService.getAIStreamText(cvData!);
+    const updateAiResponse = (response: string) => {
+      dispatch({
+        type: "SET_AI_RESPONSE",
+        payload: { aiResponse: response },
+      });
+    };
+    cvGenerationService.simulateAIStreaming(streamText, updateAiResponse);
+    const aiResult = await cvGenerationService.improveCV(cvData!);
+
+    if (!aiResult.success) {
+      throw new Error(aiResult.error || "Erreur lors de l'amélioration IA");
+    }
+
+    // Stop streaming and complete AI step
+    cvGenerationService.stopStreaming();
+    dispatch({
+      type: "PROCESS_SUCCESS",
+      payload: {
+        resumeId: null,
+        isCompleted: false,
+        stepId: "ai-improvement",
+        status: "completed",
+        details: "Completée",
+        stepContent: "CV amélioré par l'IA",
+      },
+    });
+    currentStepRef.current = null;
+
+    return aiResult;
+  }, [cvData]);
+
+  /** Step 3: Generate PDF from improved CV JSON returned by step 2*/
   const generatePDF = useCallback(
     async (improvedCVData: CVFormData) => {
-      // Check if already completed to prevent double execution
-      let shouldSkip = false;
-      if (state.isCompleted) {
-        console.log(
-          "useCVGeneration: PDF generation already completed, skipping"
-        );
-        shouldSkip = true;
-      }
-
-      if (shouldSkip) return;
-
-      // Step 3: PDF Generation
+      currentStepRef.current = "pdf-generation";
       dispatch({
         type: "PROCESS_START",
         payload: {
@@ -170,6 +244,7 @@ export function useCVGeneration({
           stepContent: "✅ CV généré avec succès !",
         },
       });
+      currentStepRef.current = null;
 
       // Call onComplete callback
       console.log("useCVGeneration: About to call onComplete callback", {
@@ -187,94 +262,25 @@ export function useCVGeneration({
         );
       }
     },
-    [state.isCompleted, onComplete, dispatch]
+    [onComplete]
   );
 
-  // Main generation orchestration
+  /** Main generation orchestration function of the modal */
   const startGeneration = useCallback(async () => {
-    // Use functional state updates to check current state without dependencies
-    let shouldReturn = false;
-    if (!cvData || state.isGenerating) {
-      shouldReturn = true;
+    // If the modal is generating or no data is sent => NO new 3-step process can be triggered.
+    if (!cvData || isGeneratingRef.current) {
+      console.log("Already generating, skipping...");
+      return;
     }
 
-    if (shouldReturn) return;
-
+    isGeneratingRef.current = true;
     dispatch({ type: "SET_IS_GENERATING", payload: { isGenerating: true } });
 
     try {
-      // Step 1: Validation
-      dispatch({
-        type: "PROCESS_START",
-        payload: {
-          stepContent: "Vérification des données du CV...",
-          stepId: "validation",
-          status: "running",
-        },
-      });
-
-      const validation = await new Promise((resolve) => {
-        setTimeout(() => {
-          const result = cvGenerationService.validateCVData(cvData!);
-          resolve(result);
-        }, 1000);
-      });
-
-      if (!(validation as any).isValid) {
-        throw new Error((validation as any).error || "Données invalides");
-      }
-
-      dispatch({
-        type: "PROCESS_SUCCESS",
-        payload: {
-          resumeId: null,
-          isCompleted: false,
-          stepId: "validation",
-          status: "completed",
-          details: "Validation completed",
-          stepContent: "Données validées avec succès",
-        },
-      });
-
-      // Step 2: AI Improvement
-      dispatch({
-        type: "PROCESS_START",
-        payload: {
-          stepContent: "Amélioration du contenu par IA...",
-          stepId: "ai-improvement",
-          status: "running",
-        },
-      });
-
-      // Start AI streaming simulation
-      const streamText = cvGenerationService.getAIStreamText(cvData!);
-      const updateAiResponse = (response: string) => {
-        dispatch({
-          type: "SET_AI_RESPONSE",
-          payload: { aiResponse: response },
-        });
-      };
-      cvGenerationService.simulateAIStreaming(streamText, updateAiResponse);
-
-      const aiResult = await cvGenerationService.improveCV(cvData!);
-
-      if (!aiResult.success) {
-        throw new Error(aiResult.error || "Erreur lors de l'amélioration IA");
-      }
-
-      // Stop streaming and complete AI step
-      cvGenerationService.stopStreaming();
-      dispatch({
-        type: "PROCESS_SUCCESS",
-        payload: {
-          resumeId: null,
-          isCompleted: false,
-          stepId: "ai-improvement",
-          status: "completed",
-          details: "AI improvement completed",
-          stepContent: "CV amélioré par l'IA",
-        },
-      });
+      // Step 1: Validate CV data
+      await validateData();
+      // Step 2: Improve CV
+      const aiResult = await improveCV();
 
       // Step 3: Generate PDF
       if (aiResult.improvedCV) {
@@ -287,13 +293,13 @@ export function useCVGeneration({
       const errorMessage =
         error instanceof Error ? error.message : "Erreur inconnue";
 
-      // Find the current running step
-      const currentStep = state.steps.find((step) => step.status === "running");
-      if (currentStep) {
+      // Use the current step from ref instead of searching stale state
+      const currentStepId = currentStepRef.current;
+      if (currentStepId) {
         dispatch({
           type: "SET_STEP_STATUS",
           payload: {
-            stepId: currentStep.id,
+            stepId: currentStepId,
             status: "error",
             details: errorMessage,
           },
@@ -303,7 +309,7 @@ export function useCVGeneration({
       const cvError = cvGenerationService.createCVGenerationError(
         errorMessage,
         {
-          step: currentStep?.id,
+          step: currentStepId || undefined,
           error: error instanceof Error ? error : undefined,
         }
       );
@@ -312,12 +318,11 @@ export function useCVGeneration({
         payload: { error: cvError },
       });
     } finally {
-      dispatch({
-        type: "SET_IS_GENERATING",
-        payload: { isGenerating: false },
-      });
+      isGeneratingRef.current = false;
+      currentStepRef.current = null;
+      dispatch({ type: "SET_IS_GENERATING", payload: { isGenerating: false } });
     }
-  }, [cvData, dispatch, state.isGenerating, state.steps, generatePDF]);
+  }, [cvData, validateData, improveCV, generatePDF]);
 
   // Navigate to preview page
   const handlePreview = useCallback(() => {
@@ -333,7 +338,7 @@ export function useCVGeneration({
       console.log("useCVGeneration: Starting generation due to modal opening");
       startGeneration();
     }
-  }, [isOpen, cvData, state.isGenerating, state.isCompleted, startGeneration]);
+  }, [isOpen, cvData, startGeneration]);
 
   // Reset when modal close
   useEffect(() => {
